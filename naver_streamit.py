@@ -1,5 +1,4 @@
 import streamlit as st
-from IPython.display import display 
 from numpy.lib.function_base import select
 import requests
 from bs4 import BeautifulSoup
@@ -90,7 +89,7 @@ shop_df['쿠폰'] = pd.to_numeric(shop_df['쿠폰']).fillna(0).astype(int)
 # shop_df.to_csv(today + search+'.csv', encoding="utf-8-sig")
 신고 = shop_df[["랭킹", "스토어명", "제품이름", "최저가", "모바일최저가", '구매포인트','쿠폰', '이벤트','구매건수', '리뷰수',"링크"]]
 # 신고.to_csv(today + search+'.csv', encoding="utf-8-sig")
-print(url)
+st.write(url)
 productNames = shop_df.get('제품이름')
 manuTag = shop_df.get('검색태그')
 characterValue = shop_df.get('속성')
@@ -130,9 +129,9 @@ q1 = shop_df['모바일최저가'].quantile(0.25)
 shop_df['구매건수'] = pd.to_numeric(shop_df['구매건수'])
 shop_df['리뷰수'] = pd.to_numeric(shop_df['리뷰수'])
 
-print(f'검색어 : {search}')
-print('6개월판매수량 : '+str(shop_df['구매건수'].sum()))
-print('리뷰수 : '+str(shop_df['리뷰수'].sum()))
+st.write(f'검색어 : {search}')
+st.write('6개월판매수량 : '+str(shop_df['구매건수'].sum()))
+st.write('리뷰수 : '+str(shop_df['리뷰수'].sum()))
 st.dataframe(shop_df)
 st.dataframe(freq_word(1, 1, productNames))
 st.dataframe(freq_word(1, 1, manuTag))
