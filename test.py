@@ -51,7 +51,7 @@ def main():
         st.write(product_result)
 
         st.write(recipient_info_result)
-        st.write(contact1_result}")
+        st.write(contact1_result)
 
         st.write(delivery_info_result.replace('정보 배송지 정보 수취인명\t\t연락처2\t 배송지', '').strip())
 
