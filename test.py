@@ -38,7 +38,7 @@ def extract_information(text):
 
 # Streamlit app
 def main():
-    st.title("Text Information Extractor")
+    st.title("네이버 주문 주소 쉽게 변경")
 
     # Text input
     text = st.text_area("Input Text", "")
@@ -49,12 +49,9 @@ def main():
 
         # Display results
         st.write(product_result)
-
         st.write(recipient_info_result)
         st.write(contact1_result)
-
-        st.write(delivery_info_result.replace('정보 배송지 정보 수취인명\t\t연락처2\t 배송지', '')
-
+        st.write(delivery_info_result.replace('정보 배송지 정보 수취인명\t\t연락처2\t 배송지', '').strip())
 
 if __name__ == "__main__":
     main()
