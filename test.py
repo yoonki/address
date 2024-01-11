@@ -48,15 +48,11 @@ def main():
         product_result, recipient_info_result, contact1_result, delivery_info_result = extract_information(text)
 
         # Display results
-        st.header("Extracted Information:")
-        st.subheader("Product Information:")
         st.write(product_result)
 
-        st.subheader("Recipient Information:")
         st.write(recipient_info_result)
-        st.write(f"Contact 1: {contact1_result}")
+        st.write(contact1_result}")
 
-        st.subheader("Delivery Information:")
         st.write(delivery_info_result.replace('정보 배송지 정보 수취인명\t\t연락처2\t 배송지', '').strip())
 
 
