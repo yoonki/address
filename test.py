@@ -27,22 +27,27 @@ def extract_delivery_info(text, recipient_info_result, contact1_result):
         return "배송지 및 배송메모를 찾을 수 없습니다."
 
 def main():
-    st.title("스마트스토어 주문 주소 복사")
+    st.title("네이버 주소 복사")
     text = st.text_area("Enter text:")
-    
-    if st.button("Extract Information"):
+
+    # Define a callback to execute the extraction when the text area changes
+    def on_change_textarea():
         product_result = extract_product_info(text)
         recipient_info_result, contact1_result = extract_recipient_info(text)
         delivery_info_result = extract_delivery_info(text, recipient_info_result, contact1_result)
 
-        st.text(product_result)
+        # Output the extracted information without subheaders
+        st.text(f"Product Information: {product_result}")
+        st.text(f"Recipient Information: {recipient_info_result} {contact1_result}")
+        st.text(f"Delivery Information: {delivery_info_result}")
 
+        # Copy the extracted information to the clipboard using st.clipboard
+        clipboard_content = f"Product Information: {product_result}\nRecipient Information: {recipient_info_result} {contact1_result}\nDelivery Information: {delivery_info_result}"
+        st.clipboard(clipboard_content)
 
-        st.text(recipient_info_result)
-        st.text(contact1_result)
-
-
-        st.text(delivery_info_result)
+    # Register the callback
+    st.text_area("Enter text:", value="", on_change=on_change_textarea, height=200)
+    st.text("The extracted information has been copied to the clipboard.")
 
 if __name__ == "__main__":
     main()
