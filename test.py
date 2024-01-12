@@ -27,22 +27,27 @@ def extract_delivery_info(text, recipient_info_result, contact1_result):
         return "배송지 및 배송메모를 찾을 수 없습니다."
 
 def main():
-    st.title("스마트스토어 주문 주소 복사")
+    st.title("스.스.주소복사")
     text = st.text_area("Enter text:")
-    
-    if st.button("Extract Information"):
+
+    # Define a callback to execute the extraction when the text area changes
+    def on_change_textarea():
         product_result = extract_product_info(text)
         recipient_info_result, contact1_result = extract_recipient_info(text)
         delivery_info_result = extract_delivery_info(text, recipient_info_result, contact1_result)
 
+        # st.subheader("Product Information:")
         st.text(product_result)
 
-
+        # st.subheader("Recipient Information:")
         st.text(recipient_info_result)
         st.text(contact1_result)
 
-
+        # st.subheader("Delivery Information:")
         st.text(delivery_info_result)
+
+    # Register the callback
+    st.text_area("Enter text:", value="", on_change=on_change_textarea, height=200)
 
 if __name__ == "__main__":
     main()
