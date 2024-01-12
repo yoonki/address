@@ -35,15 +35,15 @@ def main():
         recipient_info, contact1 = extract_recipient_info(text)
         delivery_info = extract_delivery_info(text, recipient_info, contact1)
 
-        st.text(f"Product Information: {product_result}")
-        st.text(f"Recipient Information: {recipient_info} {contact1}")
-        st.text(f"Delivery Information: {delivery_info}")
+        st.text(product_result)
+        st.text(contact1)  # Displaying only the contact information
+        st.text(delivery_info)
 
         # Add a line break for easy pasting and searching
         st.text("")
 
-        # Display the text for easy copying
-        st.text("Copy and paste the above information for quick search.")
+        # Display the message about checking options and quantity
+        st.subtitle("옵션, 수량 확인 .")
 
 if __name__ == "__main__":
     main()
