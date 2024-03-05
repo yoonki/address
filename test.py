@@ -54,8 +54,9 @@ def main():
         for result in option_order_quantity_results:
             st.text(result)
 
-        st.text(order_quantity_numbers)
-
+        for number in order_quantity_numbers:
+            st.text(number)
+       
         # st.subheader("Recipient Information:")
         st.text(recipient_info_result)
         st.text(contact1_result)
