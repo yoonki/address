@@ -6,6 +6,11 @@ def extract_product_info(text):
     product_match = product_pattern.search(text)
     return product_match.group(1).strip() if product_match else "상품명 및 주문 상태를 찾을 수 없습니다."
 
+def extract_option_order_quantity(text):
+    pattern = re.compile(r'옵션(.*?)주문수량', re.DOTALL)
+    matches = pattern.findall(text)
+    return matches if matches else ["옵션과 주문수량 사이의 텍스트를 찾을 수 없습니다."]
+
 def extract_recipient_info(text):
     recipient_info_pattern = re.compile(r'수취인명(.*?)연락처1(.*?)연락처2', re.DOTALL)
     recipient_info_match = recipient_info_pattern.search(text)
@@ -27,22 +32,25 @@ def extract_delivery_info(text, recipient_info_result, contact1_result):
         return "배송지 및 배송메모를 찾을 수 없습니다."
 
 def main():
-    st.title("스마트스토어 주문 주소 복사")
-    text = st.text_area("Enter text:")
-    
     if st.button("Extract Information"):
         product_result = extract_product_info(text)
         recipient_info_result, contact1_result = extract_recipient_info(text)
         delivery_info_result = extract_delivery_info(text, recipient_info_result, contact1_result)
+        option_order_quantity_results = extract_option_order_quantity(text)
 
+        st.text("Product Information:")
         st.text(product_result)
 
-
+        st.text("Recipient Information:")
         st.text(recipient_info_result)
         st.text(contact1_result)
 
-
+        st.text("Delivery Information:")
         st.text(delivery_info_result)
+
+        st.text("Option and Order Quantity Information:")
+        for result in option_order_quantity_results:
+            st.text(result)
 
 if __name__ == "__main__":
     main()
