@@ -12,7 +12,7 @@ def extract_option_order_quantity(text):
     return matches if matches else ["옵션과 주문수량 사이의 텍스트를 찾을 수 없습니다."]
 
 def extract_order_quantity_amount(text):
-    pattern = re.compile(r'주문수량\s*:\s*([0-9,]+)', re.DOTALL)
+    pattern = re.compile(r'주문수량\s*([0-9,]+)', re.DOTALL)
     match = pattern.search(text)
     if match:
         return f"주문수량 : {match.group(1).replace(',', '')}"
