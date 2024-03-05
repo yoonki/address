@@ -41,18 +41,18 @@ def main():
         recipient_info_result, contact1_result = extract_recipient_info(text)
         delivery_info_result = extract_delivery_info(text, recipient_info_result, contact1_result)
         
-        st.subheader("Product Information:")
+        # st.subheader("Product Information:")
         st.text(product_result)
 
-        st.subheader("Option and Order Quantity Information:")
+        # st.subheader("Option and Order Quantity Information:")
         for result in option_order_quantity_results:
             st.text(result)
 
-        st.subheader("Recipient Information:")
+        # st.subheader("Recipient Information:")
         st.text(recipient_info_result)
         st.text(contact1_result)
 
-        st.subheader("Delivery Information:")
+        # st.subheader("Delivery Information:")
         st.text(delivery_info_result)
 
 if __name__ == "__main__":
