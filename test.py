@@ -12,7 +12,7 @@ def extract_option_order_quantity(text):
     return matches if matches else ["옵션과 주문수량 사이의 텍스트를 찾을 수 없습니다."]
 
 def extract_order_quantity_numbers(text):
-    pattern = re.compile(r'주문수량\s*:\s*(\d+)', re.DOTALL)
+    pattern = re.compile(r'주문수량\s*([0-9,]+)', re.DOTALL)
     matches = pattern.findall(text)
     return matches if matches else ["주문수량에 해당하는 숫자를 찾을 수 없습니다."]
 
