@@ -11,6 +11,11 @@ def extract_option_order_quantity(text):
     matches = pattern.findall(text)
     return matches if matches else ["옵션과 주문수량 사이의 텍스트를 찾을 수 없습니다."]
 
+def extract_order_quantity_numbers(text):
+    pattern = re.compile(r'주문수량\s*:\s*(\d+)', re.DOTALL)
+    matches = pattern.findall(text)
+    return matches if matches else ["주문수량에 해당하는 숫자를 찾을 수 없습니다."]
+
 def extract_recipient_info(text):
     recipient_info_pattern = re.compile(r'수취인명(.*?)연락처1(.*?)연락처2', re.DOTALL)
     recipient_info_match = recipient_info_pattern.search(text)
@@ -38,6 +43,7 @@ def main():
     if st.button("Extract Information"):
         product_result = extract_product_info(text)
         option_order_quantity_results = extract_option_order_quantity(text)
+        order_quantity_numbers = extract_order_quantity_numbers(text)
         recipient_info_result, contact1_result = extract_recipient_info(text)
         delivery_info_result = extract_delivery_info(text, recipient_info_result, contact1_result)
         
@@ -47,6 +53,8 @@ def main():
         # st.subheader("Option and Order Quantity Information:")
         for result in option_order_quantity_results:
             st.text(result)
+
+        st.text(order_quantity_numbers)
 
         # st.subheader("Recipient Information:")
         st.text(recipient_info_result)
