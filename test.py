@@ -199,28 +199,12 @@ def create_copy_text_areas(results):
     
     # 메인 복사 영역
     st.text_area(
-        "📋 전체 정보 복사 (Ctrl+A → Ctrl+C):",
+        "📋 추출된 정보 (Ctrl+A → Ctrl+C로 복사):",
         value=final_text,
         height=200,
         key="main_copy_text",
         help="텍스트 영역 클릭 → Ctrl+A (전체 선택) → Ctrl+C (복사)"
     )
-    
-    # 개별 복사 영역들
-    st.subheader("📝 개별 정보 복사:")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.text_area("상품명:", value=results['product'], height=60, key="product_copy_area")
-        st.text_area("수취인 정보:", 
-                    value=f"{results['recipient_name']}\n{results['contact1']}", 
-                    height=80, key="recipient_copy_area")
-    
-    with col2:
-        option_text = '\n'.join(results['options']) + '\n' + results['order_quantity']
-        st.text_area("옵션 및 수량:", value=option_text, height=80, key="option_copy_area")
-        st.text_area("배송지:", value=results['delivery'], height=60, key="delivery_copy_area")
 
 def main():
     st.title("🏪 스마트스토어 주문 정보 추출기")
