@@ -197,14 +197,66 @@ def create_copy_text_areas(results):
     
     final_text = '\n'.join(filtered_results)
     
-    # 메인 복사 영역
-    st.text_area(
-        "📋 추출된 정보 (Ctrl+A → Ctrl+C로 복사):",
-        value=final_text,
-        height=200,
-        key="main_copy_text",
-        help="텍스트 영역 클릭 → Ctrl+A (전체 선택) → Ctrl+C (복사)"
-    )
+    # 텍스트 영역과 복사 버튼을 나란히 배치
+    col1, col2 = st.columns([5, 1])
+    
+    with col1:
+        st.text_area(
+            "📋 추출된 정보:",
+            value=final_text,
+            height=200,
+            key="main_copy_text",
+            help="추출된 모든 정보가 표시됩니다"
+        )
+    
+    with col2:
+        st.write("")  # 버튼 위치 조정을 위한 공간
+        st.write("")
+        if st.button("📋 복사", help="클립보드에 복사", key="copy_button"):
+            # JavaScript를 이용한 클립보드 복사
+            st.components.v1.html(f"""
+                <script>
+                    async function copyToClipboard() {{
+                        const text = `{final_text.replace('`', '\\`').replace('\n', '\\n')}`;
+                        try {{
+                            await navigator.clipboard.writeText(text);
+                            // 성공 알림을 위한 임시 div 생성
+                            const div = document.createElement('div');
+                            div.style.cssText = `
+                                position: fixed;
+                                top: 20px;
+                                right: 20px;
+                                background: #4CAF50;
+                                color: white;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                z-index: 1000;
+                                font-family: Arial;
+                            `;
+                            div.textContent = '복사되었습니다! ✅';
+                            document.body.appendChild(div);
+                            setTimeout(() => div.remove(), 2000);
+                        }} catch (err) {{
+                            // 실패 시 대체 방법
+                            const textArea = document.createElement('textarea');
+                            textArea.value = text;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            try {{
+                                document.execCommand('copy');
+                                alert('복사되었습니다!');
+                            }} catch (fallbackErr) {{
+                                alert('복사 실패. 수동으로 복사해주세요.');
+                            }}
+                            document.body.removeChild(textArea);
+                        }}
+                    }}
+                    copyToClipboard();
+                </script>
+            """, height=0)
+    
+    # 수동 복사 방법 안내
+    st.info("💡 **복사 방법**: 위 복사 버튼 클릭 또는 텍스트 영역에서 **Ctrl+A** → **Ctrl+C**")
 
 def main():
     st.title("🏪 스마트스토어 주문 정보 추출기")
@@ -254,7 +306,7 @@ def main():
             create_copy_text_areas(results)
             
             # 사용법 안내
-            st.info("💡 **복사 방법**: 텍스트 영역 클릭 → **Ctrl+A** (전체 선택) → **Ctrl+C** (복사)")
+            st.info("💡 **복사 방법**: 📋 복사 버튼 클릭 또는 텍스트 영역에서 **Ctrl+A** → **Ctrl+C**")
 
 if __name__ == "__main__":
     st.set_page_config(
