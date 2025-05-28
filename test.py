@@ -30,27 +30,35 @@ def extract_recipient_info(text):
         return "수취인명, 연락처1, 연락처2를 찾을 수 없습니다.", ""
 
 def extract_delivery_info(text, recipient_info_result, contact1_result):
-    info_delivery_text = re.sub(f'{recipient_info_result}.*?{contact1_result}', '', text, flags=re.DOTALL)
-    delivery_info_pattern = re.compile(r'배송지(.*?)배송메모', re.DOTALL)
-    delivery_info_match = delivery_info_pattern.search(info_delivery_text)
-    if delivery_info_match:
-        delivery_info_result = delivery_info_match.group(1).strip()
-        # 전화번호 뒤의 불필요한 텍스트들을 제거
-        cleaned_result = delivery_info_result.replace('정보 배송지 정보 수취인명\t\t연락처2\t 배송지','').strip()
+    # 배송지 주소만 직접 추출
+    delivery_address_pattern = re.compile(r'배송지([가-힣\s\d\-\(\),\.]+)\s*배송메모', re.DOTALL)
+    delivery_address_match = delivery_address_pattern.search(text)
+    
+    if delivery_address_match:
+        address = delivery_address_match.group(1).strip()
         
-        # 전화번호 패턴(숫자-숫자-숫자) 뒤의 텍스트에서 '배송지' 앞까지의 텍스트 제거
-        phone_pattern = re.compile(r'(\d{3}-\d{4}-\d{4})(.*?)배송지')
-        phone_match = phone_pattern.search(cleaned_result)
-        if phone_match:
-            # 전화번호와 '배송지' 사이의 텍스트를 제거하고 주소만 남김
-            address_pattern = re.compile(r'배송지(.+)')
-            address_match = address_pattern.search(cleaned_result)
-            if address_match:
-                return address_match.group(1).strip()
+        # 배송지에서만 불필요한 시스템 텍스트들 제거 (수취인명은 건드리지 않음)
+        # 수취인명과 연락처 정보를 먼저 제거
+        if recipient_info_result and recipient_info_result != "수취인명, 연락처1, 연락처2를 찾을 수 없습니다.":
+            address = address.replace(recipient_info_result, '')
+        if contact1_result:
+            address = address.replace(contact1_result, '')
+            
+        # 시스템 관련 텍스트만 제거 (일반적인 단어는 보존)
+        system_texts = [
+            '배송지 정보', '수취인명', '연락처1', '연락처2', 
+            '배송지', '\t', '\n'
+        ]
         
-        return cleaned_result
+        for system_text in system_texts:
+            address = address.replace(system_text, ' ')
+        
+        # 여러 공백을 하나로 변경하고 앞뒤 공백 제거
+        address = re.sub(r'\s+', ' ', address).strip()
+        
+        return address
     else:
-        return "배송지 및 배송메모를 찾을 수 없습니다."
+        return "배송지를 찾을 수 없습니다."
 
 def main():
     st.title("스마트스토어 주문 주소 복사")
