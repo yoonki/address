@@ -5,7 +5,8 @@ def escape_for_js(text):
     """JavaScript에서 사용할 수 있도록 텍스트를 escape 처리"""
     if not text:
         return ""
-    return text.replace('\\', '\\\\').replace('`', '\\`').replace('\n', '\\n').replace('\r', '\\r')
+    # 백틱만 escape 처리 (줄바꿈은 그대로 유지)
+    return text.replace('`', '\\`')
 
 def clean_text_format(text):
     """JavaScript에서 사용할 수 있도록 텍스트를 escape 처리"""
