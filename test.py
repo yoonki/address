@@ -111,6 +111,8 @@ def main():
             contact1_result = clean_text_format(contact1_result)
             delivery_info_result = clean_text_format(delivery_info_result)
         
+        # 개별 결과 표시
+        st.subheader("추출된 정보:")
         st.text(product_result)
 
         for result in option_order_quantity_results:
@@ -136,7 +138,75 @@ def main():
         filtered_results = [result for result in all_results if result and not result.startswith("찾을 수 없습니다")]
         
         final_text = '\n'.join(filtered_results)
-        st.text_area("복사해서 메일에 붙여넣기:", value=final_text, height=200)
+        
+        # 텍스트 영역과 복사 버튼을 나란히 배치
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            st.text_area("복사해서 메일에 붙여넣기:", value=final_text, height=200, key="copy_text")
+        
+        with col2:
+            st.write("")  # 버튼 위치 조정을 위한 공간
+            st.write("")
+            if st.button("📋 복사", help="클립보드에 복사"):
+                # JavaScript를 사용한 클립보드 복사
+                st.components.v1.html(f'''
+                <script>
+                navigator.clipboard.writeText(`{final_text.replace('`', '\\`')}`).then(function() {{
+                    alert('복사되었습니다!');
+                }}, function(err) {{
+                    console.error('복사 실패: ', err);
+                    // 대체 방법으로 텍스트 선택
+                    var textArea = document.createElement("textarea");
+                    textArea.value = `{final_text.replace('`', '\\`')}`;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {{
+                        document.execCommand('copy');
+                        alert('복사되었습니다!');
+                    }} catch(err) {{
+                        alert('복사 실패. 수동으로 복사해주세요.');
+                    }}
+                    document.body.removeChild(textArea);
+                }});
+                </script>
+                ''', height=0)
+        
+        # 추가 복사 옵션들
+        st.subheader("개별 복사:")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("상품명만 복사"):
+                st.components.v1.html(f'''
+                <script>
+                navigator.clipboard.writeText(`{product_result.replace('`', '\\`')}`).then(function() {{
+                    alert('상품명이 복사되었습니다!');
+                }});
+                </script>
+                ''', height=0)
+        
+        with col2:
+            if st.button("수취인 정보 복사"):
+                recipient_text = f"{recipient_info_result}\n{contact1_result}"
+                st.components.v1.html(f'''
+                <script>
+                navigator.clipboard.writeText(`{recipient_text.replace('`', '\\`')}`).then(function() {{
+                    alert('수취인 정보가 복사되었습니다!');
+                }});
+                </script>
+                ''', height=0)
+        
+        with col3:
+            if st.button("배송지만 복사"):
+                st.components.v1.html(f'''
+                <script>
+                navigator.clipboard.writeText(`{delivery_info_result.replace('`', '\\`')}`).then(function() {{
+                    alert('배송지가 복사되었습니다!');
+                }});
+                </script>
+                ''', height=0)
 
 if __name__ == "__main__":
     st.set_page_config(page_title="Order Information Extractor", layout="wide")
