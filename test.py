@@ -155,7 +155,7 @@ def main():
             "아래 텍스트를 전체 선택(Ctrl+A 또는 Cmd+A)해서 복사하세요:",
             value=final_text,
             height=200,
-            key="copy_text",
+            key="main_copy_text",
             help="텍스트 영역을 클릭한 후 Ctrl+A(또는 Cmd+A)로 전체 선택하고 Ctrl+C(또는 Cmd+C)로 복사하세요"
         )
         
@@ -168,13 +168,13 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.text_area("상품명:", value=product_result, height=60, key="product_copy")
-            st.text_area("수취인 정보:", value=f"{recipient_info_result}\n{contact1_result}", height=80, key="recipient_copy")
+            st.text_area("상품명:", value=product_result, height=60, key="product_copy_area")
+            st.text_area("수취인 정보:", value=f"{recipient_info_result}\n{contact1_result}", height=80, key="recipient_copy_area")
         
         with col2:
             option_text = '\n'.join(option_order_quantity_results) + '\n' + order_quantity_numbers
-            st.text_area("옵션 및 수량:", value=option_text, height=80, key="option_copy")
-            st.text_area("배송지:", value=delivery_info_result, height=60, key="delivery_copy")
+            st.text_area("옵션 및 수량:", value=option_text, height=80, key="option_copy_area")
+            st.text_area("배송지:", value=delivery_info_result, height=60, key="delivery_copy_area")
 
 if __name__ == "__main__":
     st.set_page_config(page_title="Order Information Extractor", layout="wide")
