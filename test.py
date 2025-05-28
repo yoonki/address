@@ -150,78 +150,31 @@ def main():
         
         final_text = '\n'.join(filtered_results)
         
-        # 텍스트 영역과 복사 버튼을 나란히 배치
-        col1, col2 = st.columns([4, 1])
+        # 복사용 텍스트 영역 (사용자가 직접 전체 선택해서 복사)
+        st.text_area(
+            "아래 텍스트를 전체 선택(Ctrl+A 또는 Cmd+A)해서 복사하세요:",
+            value=final_text,
+            height=200,
+            key="copy_text",
+            help="텍스트 영역을 클릭한 후 Ctrl+A(또는 Cmd+A)로 전체 선택하고 Ctrl+C(또는 Cmd+C)로 복사하세요"
+        )
+        
+        # 추가 정보 표시
+        st.info("💡 복사 방법: 위 텍스트 영역을 클릭 → 전체 선택(Ctrl+A) → 복사(Ctrl+C)")
+        
+        # 개별 정보도 복사하기 쉽게 표시
+        st.subheader("개별 정보 복사:")
+        
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.text_area("복사해서 메일에 붙여넣기:", value=final_text, height=200, key="copy_text")
+            st.text_area("상품명:", value=product_result, height=60, key="product_copy")
+            st.text_area("수취인 정보:", value=f"{recipient_info_result}\n{contact1_result}", height=80, key="recipient_copy")
         
         with col2:
-            st.write("")  # 버튼 위치 조정을 위한 공간
-            st.write("")
-            if st.button("📋 복사", help="클립보드에 복사"):
-                # JavaScript를 사용한 클립보드 복사
-                escaped_text = escape_for_js(final_text)
-                st.components.v1.html(f'''
-                <script>
-                navigator.clipboard.writeText(`{escaped_text}`).then(function() {{
-                    alert('복사되었습니다!');
-                }}, function(err) {{
-                    console.error('복사 실패: ', err);
-                    // 대체 방법으로 텍스트 선택
-                    var textArea = document.createElement("textarea");
-                    textArea.value = `{escaped_text}`;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    try {{
-                        document.execCommand('copy');
-                        alert('복사되었습니다!');
-                    }} catch(err) {{
-                        alert('복사 실패. 수동으로 복사해주세요.');
-                    }}
-                    document.body.removeChild(textArea);
-                }});
-                </script>
-                ''', height=0)
-        
-        # 추가 복사 옵션들
-        st.subheader("개별 복사:")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("상품명만 복사"):
-                escaped_product = escape_for_js(product_result)
-                st.components.v1.html(f'''
-                <script>
-                navigator.clipboard.writeText(`{escaped_product}`).then(function() {{
-                    alert('상품명이 복사되었습니다!');
-                }});
-                </script>
-                ''', height=0)
-        
-        with col2:
-            if st.button("수취인 정보 복사"):
-                recipient_text = f"{recipient_info_result}\n{contact1_result}"
-                escaped_recipient = escape_for_js(recipient_text)
-                st.components.v1.html(f'''
-                <script>
-                navigator.clipboard.writeText(`{escaped_recipient}`).then(function() {{
-                    alert('수취인 정보가 복사되었습니다!');
-                }});
-                </script>
-                ''', height=0)
-        
-        with col3:
-            if st.button("배송지만 복사"):
-                escaped_delivery = escape_for_js(delivery_info_result)
-                st.components.v1.html(f'''
-                <script>
-                navigator.clipboard.writeText(`{escaped_delivery}`).then(function() {{
-                    alert('배송지가 복사되었습니다!');
-                }});
-                </script>
-                ''', height=0)
+            option_text = '\n'.join(option_order_quantity_results) + '\n' + order_quantity_numbers
+            st.text_area("옵션 및 수량:", value=option_text, height=80, key="option_copy")
+            st.text_area("배송지:", value=delivery_info_result, height=60, key="delivery_copy")
 
 if __name__ == "__main__":
     st.set_page_config(page_title="Order Information Extractor", layout="wide")
