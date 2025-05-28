@@ -1,7 +1,17 @@
 import streamlit as st
 import re
 
+def escape_for_js(text):
+    """JavaScript에서 사용할 수 있도록 텍스트를 escape 처리"""
+    if not text:
+        return ""
+    return text.replace('\\', '\\\\').replace('`', '\\`').replace('\n', '\\n').replace('\r', '\\r')
+
 def clean_text_format(text):
+    """JavaScript에서 사용할 수 있도록 텍스트를 escape 처리"""
+    if not text:
+        return ""
+    return text.replace('`', '\\`').replace('\n', '\\n').replace('\r', '\\r').replace('\\', '\\\\')
     """애플 메일이나 다른 앱에서 복사한 텍스트의 서식을 제거"""
     if not text:
         return text
@@ -150,15 +160,16 @@ def main():
             st.write("")
             if st.button("📋 복사", help="클립보드에 복사"):
                 # JavaScript를 사용한 클립보드 복사
+                escaped_text = escape_for_js(final_text)
                 st.components.v1.html(f'''
                 <script>
-                navigator.clipboard.writeText(`{final_text.replace('`', '\\`')}`).then(function() {{
+                navigator.clipboard.writeText(`{escaped_text}`).then(function() {{
                     alert('복사되었습니다!');
                 }}, function(err) {{
                     console.error('복사 실패: ', err);
                     // 대체 방법으로 텍스트 선택
                     var textArea = document.createElement("textarea");
-                    textArea.value = `{final_text.replace('`', '\\`')}`;
+                    textArea.value = `{escaped_text}`;
                     document.body.appendChild(textArea);
                     textArea.select();
                     try {{
@@ -179,9 +190,10 @@ def main():
         
         with col1:
             if st.button("상품명만 복사"):
+                escaped_product = escape_for_js(product_result)
                 st.components.v1.html(f'''
                 <script>
-                navigator.clipboard.writeText(`{product_result.replace('`', '\\`')}`).then(function() {{
+                navigator.clipboard.writeText(`{escaped_product}`).then(function() {{
                     alert('상품명이 복사되었습니다!');
                 }});
                 </script>
@@ -190,9 +202,10 @@ def main():
         with col2:
             if st.button("수취인 정보 복사"):
                 recipient_text = f"{recipient_info_result}\n{contact1_result}"
+                escaped_recipient = escape_for_js(recipient_text)
                 st.components.v1.html(f'''
                 <script>
-                navigator.clipboard.writeText(`{recipient_text.replace('`', '\\`')}`).then(function() {{
+                navigator.clipboard.writeText(`{escaped_recipient}`).then(function() {{
                     alert('수취인 정보가 복사되었습니다!');
                 }});
                 </script>
@@ -200,9 +213,10 @@ def main():
         
         with col3:
             if st.button("배송지만 복사"):
+                escaped_delivery = escape_for_js(delivery_info_result)
                 st.components.v1.html(f'''
                 <script>
-                navigator.clipboard.writeText(`{delivery_info_result.replace('`', '\\`')}`).then(function() {{
+                navigator.clipboard.writeText(`{escaped_delivery}`).then(function() {{
                     alert('배송지가 복사되었습니다!');
                 }});
                 </script>
