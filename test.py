@@ -197,14 +197,11 @@ def create_copy_text_areas(results):
     
     final_text = '\n'.join(filtered_results)
     
-    # 메인 복사 영역
-    st.text_area(
-        "📋 추출된 정보 (Ctrl+A → Ctrl+C로 복사):",
-        value=final_text,
-        height=200,
-        key="main_copy_text",
-        help="텍스트 영역 클릭 → Ctrl+A (전체 선택) → Ctrl+C (복사)"
-    )
+    # st.code를 사용하여 자동 복사 버튼 제공
+    st.subheader("📋 추출된 정보")
+    st.info("💡 **복사 방법**: 아래 박스 우상단의 복사 버튼을 클릭하세요!")
+    
+    st.code(final_text, language=None)
 
 def main():
     st.title("🏪 스마트스토어 주문 정보 추출기")
@@ -253,8 +250,8 @@ def main():
             # 복사용 텍스트 영역들
             create_copy_text_areas(results)
             
-            # 사용법 안내
-            st.info("💡 **복사 방법**: 텍스트 영역 클릭 → **Ctrl+A** (전체 선택) → **Ctrl+C** (복사)")
+            # 사용법 안내 (st.code에 내장된 복사 버튼 사용)
+            st.success("✅ 정보 추출 완료! 아래에서 복사 버튼을 이용해 복사하세요.")
 
 if __name__ == "__main__":
     st.set_page_config(
