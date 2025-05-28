@@ -214,10 +214,13 @@ def create_copy_text_areas(results):
         st.write("")
         if st.button("📋 복사", help="클립보드에 복사", key="copy_button"):
             # JavaScript를 이용한 클립보드 복사
+            # f-string 문제 해결을 위해 텍스트를 미리 처리
+            escaped_text = final_text.replace('`', '\\`').replace('\n', '\\n').replace('\\', '\\\\')
+            
             st.components.v1.html(f"""
                 <script>
                     async function copyToClipboard() {{
-                        const text = `{final_text.replace('`', '\\`').replace('\n', '\\n')}`;
+                        const text = `{escaped_text}`;
                         try {{
                             await navigator.clipboard.writeText(text);
                             // 성공 알림을 위한 임시 div 생성
