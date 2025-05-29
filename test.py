@@ -113,31 +113,26 @@ def clean_address_text(address, recipient_name, contact1):
     return PATTERNS['cleanup_whitespace'].sub(' ', address).strip()
 
 def extract_delivery_info(text, recipient_name, contact1):
-    """배송지 정보 추출 (최적화된 버전)"""
+    """배송지 정보 추출 (단순화된 버전)"""
     try:
-        # 여러 패턴으로 시도
-        patterns = [
-            # 패턴 1: 배송지[주소]배송메모
-            re.compile(r'배송지([가-힣\s\d\-\(\),\.]+)\s*배송메모', re.DOTALL),
-            # 패턴 2: 배송지 다음 줄에 주소가 오는 경우
-            re.compile(r'배송지\s*\n?\s*([가-힣\s\d\-\(\),\.]+?)\s*배송메모', re.DOTALL),
-            # 패턴 3: 배송지 정보 다음에 주소
-            re.compile(r'배송지\s*정보[^가-힣]*([가-힣][가-힣\s\d\-\(\),\.]+?)\s*배송메모', re.DOTALL),
-            # 패턴 4: 더 유연한 패턴 (한글로 시작하는 주소)
-            re.compile(r'배송지[^가-힣]*([가-힣][가-힣\s\d\-\(\),\.]+?)\s*배송메모', re.DOTALL)
-        ]
+        # 배송지부터 배송메모 전까지의 모든 텍스트 추출
+        pattern = re.compile(r'배송지(.*?)배송메모', re.DOTALL)
+        match = pattern.search(text)
         
-        for pattern in patterns:
-            match = pattern.search(text)
-            if match:
-                address = match.group(1).strip()
-                cleaned_address = clean_address_text(address, recipient_name, contact1)
-                
-                # 주소가 의미있는 길이인지 확인
-                if len(cleaned_address) > 5:
-                    return cleaned_address
+        if match:
+            raw_delivery_text = match.group(1).strip()
+            
+            # 배송지 텍스트에서 불필요한 부분들 정리
+            cleaned_address = clean_address_text(raw_delivery_text, recipient_name, contact1)
+            
+            # 의미있는 주소인지 확인
+            if len(cleaned_address) > 5:
+                return cleaned_address
+            else:
+                return "배송지 정보가 부족합니다"
         
         return "배송지를 찾을 수 없습니다"
+        
     except Exception as e:
         st.error(f"배송지 추출 중 오류: {str(e)}")
         return "배송지 추출 오류"
