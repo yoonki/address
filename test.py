@@ -115,14 +115,29 @@ def clean_address_text(address, recipient_name, contact1):
 def extract_delivery_info(text, recipient_name, contact1):
     """배송지 정보 추출 (최적화된 버전)"""
     try:
-        match = PATTERNS['delivery'].search(text)
-        if not match:
-            return "배송지를 찾을 수 없습니다"
+        # 여러 패턴으로 시도
+        patterns = [
+            # 패턴 1: 배송지[주소]배송메모
+            re.compile(r'배송지([가-힣\s\d\-\(\),\.]+)\s*배송메모', re.DOTALL),
+            # 패턴 2: 배송지 다음 줄에 주소가 오는 경우
+            re.compile(r'배송지\s*\n?\s*([가-힣\s\d\-\(\),\.]+?)\s*배송메모', re.DOTALL),
+            # 패턴 3: 배송지 정보 다음에 주소
+            re.compile(r'배송지\s*정보[^가-힣]*([가-힣][가-힣\s\d\-\(\),\.]+?)\s*배송메모', re.DOTALL),
+            # 패턴 4: 더 유연한 패턴 (한글로 시작하는 주소)
+            re.compile(r'배송지[^가-힣]*([가-힣][가-힣\s\d\-\(\),\.]+?)\s*배송메모', re.DOTALL)
+        ]
         
-        address = match.group(1).strip()
-        cleaned_address = clean_address_text(address, recipient_name, contact1)
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match:
+                address = match.group(1).strip()
+                cleaned_address = clean_address_text(address, recipient_name, contact1)
+                
+                # 주소가 의미있는 길이인지 확인
+                if len(cleaned_address) > 5:
+                    return cleaned_address
         
-        return cleaned_address if cleaned_address else "배송지를 찾을 수 없습니다"
+        return "배송지를 찾을 수 없습니다"
     except Exception as e:
         st.error(f"배송지 추출 중 오류: {str(e)}")
         return "배송지 추출 오류"
@@ -197,11 +212,26 @@ def create_copy_text_areas(results):
     
     final_text = '\n'.join(filtered_results)
     
-    # st.code를 사용하여 자동 복사 버튼 제공
+    # 복사 가능한 형태로 표시
     st.subheader("📋 추출된 정보")
-    st.info("💡 **복사 방법**: 아래 박스 우상단의 복사 버튼을 클릭하세요!")
     
-    st.code(final_text, language=None)
+    # 방법 1: st.code 시도 (복사 버튼이 있을 경우)
+    st.info("💡 **복사 방법**: 아래 박스에서 텍스트를 선택 후 **Ctrl+C** 또는 우클릭하여 복사하세요!")
+    
+    # 코드 블록과 일반 텍스트 영역 둘 다 제공
+    with st.container():
+        # 코드 형태로 표시 (복사 버튼이 있을 수도 있음)
+        st.code(final_text, language=None)
+        
+        # 대체 방법: 복사하기 쉬운 텍스트 영역도 제공
+        with st.expander("📝 대체 복사 방법 (펼치기)"):
+            st.text_area(
+                "텍스트 영역에서 복사:",
+                value=final_text,
+                height=150,
+                key="backup_copy_text",
+                help="이 영역에서 Ctrl+A → Ctrl+C로 복사할 수 있습니다"
+            )
 
 def main():
     st.title("🏪 스마트스토어 주문 정보 추출기")
