@@ -409,20 +409,9 @@ def main():
                 for warning in warnings:
                     st.warning(f"⚠️ {warning}")
             
-            # 추출된 정보 표시
-            st.markdown("---")
-            st.subheader("✅ 추출된 정보:")
-            
-            # 개별 결과 표시 (모바일에서도 잘 보이도록 스타일링)
-            with st.container():
-                for result in [results['product']] + results['options'] + [results['order_quantity'], 
-                              results['recipient_name'], results['contact1'], results['delivery']]:
-                    if result and not any(error in result for error in ["찾을 수 없습니다", "오류"]):
-                        st.text(result)
-            
             st.markdown("---")
             
-            # 복사용 텍스트 영역들
+            # 복사용 텍스트 영역 (메인 결과)
             create_copy_text_areas(results)
             
             # 성공 메시지
