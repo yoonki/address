@@ -44,8 +44,8 @@ class PatternManager:
         patterns['delivery_alt'] = re.compile(r'배송지[\s\t]*([^\n\t]+(?:\n[^\t\n]+)*)', re.DOTALL)
         
         # 배송메모 추출 패턴 추가
-        patterns['delivery_memo'] = re.compile(r'배송메모[\s\t]+(.*?)(?=\n[\s\t]*주문|$)', re.DOTALL)
-        patterns['delivery_memo_alt'] = re.compile(r'배송메모[\s\t]*([^\n]+)', re.DOTALL)
+        patterns['delivery_memo'] = re.compile(r'배송메모[\s\t]+([^\n\r]+)(?=\n[\s\t]*주문|$)', re.DOTALL)
+        patterns['delivery_memo_alt'] = re.compile(r'배송메모[\s\t]*([^\n\r]+)', re.DOTALL)
         
         # 전화번호 패턴 (문법 오류 수정)
         phone_pattern = r'^\d{3}-\d{4}-\d{4}$'
@@ -192,6 +192,10 @@ class OrderExtractor:
                 else:
                     return ""
             
+            # 빈 배송메모 체크 (배송메모 다음에 바로 줄바꿈이나 다른 섹션이 오는 경우)
+            if not memo_text or memo_text == "":
+                return ""
+            
             # 메모 텍스트 정리
             memo_text = self.tp.clean_text_format(memo_text)
             
@@ -199,7 +203,7 @@ class OrderExtractor:
             unwanted_keywords = [
                 '주문 처리 이력', '처리일', '주문', '결제완료', '발주확인',
                 '정보', '발송기한', '닫기', '삭제',
-                '2025.06.13', '2025-06-13',  # 날짜 형식
+                '2025.06.13', '2025-06-13', '2025.06.17', '2025-06-17',  # 날짜 형식
                 ':', '-'  # 특수문자도 정리
             ]
             
@@ -209,8 +213,8 @@ class OrderExtractor:
             # 연속된 공백 제거 및 정리
             memo_text = re.sub(r'\s+', ' ', memo_text).strip()
             
-            # 날짜 패턴 제거 (YYYY.MM.DD, YYYY-MM-DD 형식)
-            memo_text = re.sub(r'\d{4}[.-]\d{2}[.-]\d{2}', '', memo_text).strip()
+            # 날짜 패턴 제거 (YYYY.MM.DD, YYYY-MM-DD, YYYYMMDD 형식)
+            memo_text = re.sub(r'\d{4}[.-]?\d{2}[.-]?\d{2}', '', memo_text).strip()
             
             # 시간 패턴 제거 (HH:MM:SS 형식)
             memo_text = re.sub(r'\d{2}:\d{2}:\d{2}', '', memo_text).strip()
@@ -218,7 +222,15 @@ class OrderExtractor:
             # 마지막으로 연속된 공백과 특수문자 정리
             memo_text = re.sub(r'[:\-\s]+', ' ', memo_text).strip()
             
-            return memo_text if memo_text and len(memo_text) > 2 else ""
+            # 최종 검증: 의미있는 내용이 있는지 확인
+            if not memo_text or len(memo_text) <= 2 or memo_text.isspace():
+                return ""
+                
+            # 숫자만 있는 경우도 제거 (날짜 잔여물)
+            if memo_text.isdigit():
+                return ""
+            
+            return memo_text
             
         except Exception as e:
             logger.error(f"배송메모 추출 오류: {e}")
