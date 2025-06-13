@@ -18,6 +18,7 @@ class ExtractionResult:
     recipient_name: str
     contact1: str
     delivery: str
+    delivery_memo: str
     warnings: List[str]
     is_valid: bool
 
@@ -41,6 +42,10 @@ class PatternManager:
         patterns['recipient'] = re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*연락처2', re.DOTALL)
         patterns['delivery'] = re.compile(r'배송지[\s\t]+(.*?)[\s\t]*배송메모', re.DOTALL)
         patterns['delivery_alt'] = re.compile(r'배송지[\s\t]*([^\n\t]+(?:\n[^\t\n]+)*)', re.DOTALL)
+        
+        # 배송메모 추출 패턴 추가
+        patterns['delivery_memo'] = re.compile(r'배송메모[\s\t]+(.*?)(?=\n[\s\t]*주문|$)', re.DOTALL)
+        patterns['delivery_memo_alt'] = re.compile(r'배송메모[\s\t]*([^\n]+)', re.DOTALL)
         
         # 전화번호 패턴 (문법 오류 수정)
         phone_pattern = r'^\d{3}-\d{4}-\d{4}$'
@@ -171,6 +176,35 @@ class OrderExtractor:
             logger.error(f"수취인 정보 추출 오류: {e}")
             return "수취인 정보 추출 오류", ""
     
+    def extract_delivery_memo(self, text: str) -> str:
+        """배송메모 추출"""
+        try:
+            # 첫 번째 패턴 시도 (주문 처리 이력까지)
+            match = self.pm.patterns['delivery_memo'].search(text)
+            
+            if match:
+                memo_text = match.group(1).strip()
+            else:
+                # 두 번째 패턴 시도 (단일 라인)
+                match = self.pm.patterns['delivery_memo_alt'].search(text)
+                if match:
+                    memo_text = match.group(1).strip()
+                else:
+                    return ""
+            
+            # 메모 텍스트 정리
+            memo_text = self.tp.clean_text_format(memo_text)
+            
+            # 불필요한 정보 제거
+            for keyword in ['주문 처리 이력', '처리일', '주문', '결제완료', '발주확인']:
+                memo_text = memo_text.replace(keyword, '').strip()
+            
+            return memo_text if memo_text else ""
+            
+        except Exception as e:
+            logger.error(f"배송메모 추출 오류: {e}")
+            return ""
+    
     def extract_delivery_info(self, text: str, recipient_name: str, contact1: str) -> str:
         """배송지 정보 추출 (개선된 버전)"""
         try:
@@ -229,6 +263,7 @@ class OrderExtractor:
         order_quantity = self.extract_order_quantity(processed_text)
         recipient_name, contact1 = self.extract_recipient_info(processed_text)
         delivery = self.extract_delivery_info(processed_text, recipient_name, contact1)
+        delivery_memo = self.extract_delivery_memo(processed_text)
         
         # 서식 제거 적용 (결과에도)
         if remove_formatting:
@@ -238,6 +273,7 @@ class OrderExtractor:
             recipient_name = self.tp.clean_text_format(recipient_name)
             contact1 = self.tp.clean_text_format(contact1)
             delivery = self.tp.clean_text_format(delivery)
+            delivery_memo = self.tp.clean_text_format(delivery_memo)
         
         # 결과 객체 생성
         result = ExtractionResult(
@@ -247,6 +283,7 @@ class OrderExtractor:
             recipient_name=recipient_name,
             contact1=contact1,
             delivery=delivery,
+            delivery_memo=delivery_memo,
             warnings=[],
             is_valid=True
         )
@@ -371,6 +408,10 @@ class UIManager:
         if result.delivery and "찾을 수 없습니다" not in result.delivery:
             valid_results.append(result.delivery)
         
+        # 배송메모가 있으면 추가
+        if result.delivery_memo and result.delivery_memo.strip():
+            valid_results.append(f"배송메모: {result.delivery_memo}")
+        
         final_text = '\n'.join(valid_results)
         
         # 결과 표시
@@ -454,6 +495,7 @@ def main():
                             "recipient_name": result.recipient_name,
                             "contact1": result.contact1,
                             "delivery": result.delivery,
+                            "delivery_memo": result.delivery_memo,
                             "warnings": result.warnings,
                             "is_valid": result.is_valid
                         })
@@ -463,6 +505,8 @@ def main():
                         processed_text = extractor.tp.clean_text_format(text) if remove_formatting else text
                         delivery_match = extractor.pm.patterns['delivery'].search(processed_text)
                         delivery_alt_match = extractor.pm.patterns['delivery_alt'].search(processed_text)
+                        delivery_memo_match = extractor.pm.patterns['delivery_memo'].search(processed_text)
+                        delivery_memo_alt_match = extractor.pm.patterns['delivery_memo_alt'].search(processed_text)
                         
                         st.write("배송지 패턴 1 (배송메모까지):", "✅ 매칭됨" if delivery_match else "❌ 매칭 안됨")
                         if delivery_match:
@@ -471,6 +515,14 @@ def main():
                         st.write("배송지 패턴 2 (대체):", "✅ 매칭됨" if delivery_alt_match else "❌ 매칭 안됨")
                         if delivery_alt_match:
                             st.code(f"매칭 결과: {delivery_alt_match.group(1)[:200]}...")
+                        
+                        st.write("배송메모 패턴 1:", "✅ 매칭됨" if delivery_memo_match else "❌ 매칭 안됨")
+                        if delivery_memo_match:
+                            st.code(f"매칭 결과: {delivery_memo_match.group(1)[:200]}...")
+                        
+                        st.write("배송메모 패턴 2 (대체):", "✅ 매칭됨" if delivery_memo_alt_match else "❌ 매칭 안됨")
+                        if delivery_memo_alt_match:
+                            st.code(f"매칭 결과: {delivery_memo_alt_match.group(1)[:200]}...")
                         
                         # 원본 텍스트 일부 표시
                         st.subheader("처리된 텍스트 (일부)")
@@ -496,6 +548,7 @@ def main():
         - 👤 수취인명
         - 📞 연락처
         - 🏠 배송지 주소
+        - 📝 배송메모 (있는 경우)
         
         ### 💡 팁
         - 복사 버튼이 안 보이면 텍스트를 직접 선택해서 복사하세요
