@@ -195,11 +195,30 @@ class OrderExtractor:
             # 메모 텍스트 정리
             memo_text = self.tp.clean_text_format(memo_text)
             
-            # 불필요한 정보 제거
-            for keyword in ['주문 처리 이력', '처리일', '주문', '결제완료', '발주확인']:
+            # 불필요한 정보 제거 (확장된 키워드 목록)
+            unwanted_keywords = [
+                '주문 처리 이력', '처리일', '주문', '결제완료', '발주확인',
+                '정보', '발송기한', '닫기', '삭제',
+                '2025.06.13', '2025-06-13',  # 날짜 형식
+                ':', '-'  # 특수문자도 정리
+            ]
+            
+            for keyword in unwanted_keywords:
                 memo_text = memo_text.replace(keyword, '').strip()
             
-            return memo_text if memo_text else ""
+            # 연속된 공백 제거 및 정리
+            memo_text = re.sub(r'\s+', ' ', memo_text).strip()
+            
+            # 날짜 패턴 제거 (YYYY.MM.DD, YYYY-MM-DD 형식)
+            memo_text = re.sub(r'\d{4}[.-]\d{2}[.-]\d{2}', '', memo_text).strip()
+            
+            # 시간 패턴 제거 (HH:MM:SS 형식)
+            memo_text = re.sub(r'\d{2}:\d{2}:\d{2}', '', memo_text).strip()
+            
+            # 마지막으로 연속된 공백과 특수문자 정리
+            memo_text = re.sub(r'[:\-\s]+', ' ', memo_text).strip()
+            
+            return memo_text if memo_text and len(memo_text) > 2 else ""
             
         except Exception as e:
             logger.error(f"배송메모 추출 오류: {e}")
