@@ -427,8 +427,8 @@ class UIManager:
         if result.delivery and "찾을 수 없습니다" not in result.delivery:
             valid_results.append(result.delivery)
         
-        # 배송메모가 있으면 추가
-        if result.delivery_memo and result.delivery_memo.strip():
+        # 배송메모가 있고 내용이 있을 때만 추가
+        if result.delivery_memo and result.delivery_memo.strip() and len(result.delivery_memo.strip()) > 0:
             valid_results.append(f"배송메모: {result.delivery_memo}")
         
         final_text = '\n'.join(valid_results)
