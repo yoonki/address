@@ -17,6 +17,7 @@ class ExtractionResult:
     order_quantity: str
     recipient_name: str
     contact1: str
+    contact2: str  # 연락처2 추가
     delivery: str
     delivery_memo: str
     warnings: List[str]
@@ -39,7 +40,11 @@ class PatternManager:
         patterns['product'] = re.compile(r'상품명\s*(.*?)\s*상품주문상태', re.DOTALL)
         patterns['option'] = re.compile(r'옵션\s*(.*?)\s*주문수량', re.DOTALL)
         patterns['order_quantity'] = re.compile(r'주문수량\s*([0-9,]+)', re.DOTALL)
-        patterns['recipient'] = re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*연락처2', re.DOTALL)
+        
+        # 수취인 정보 패턴 개선 - 연락처2 처리
+        patterns['recipient'] = re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*연락처2[\s\t]*(.*?)[\s\t]*배송지', re.DOTALL)
+        patterns['recipient_no_contact2'] = re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*배송지', re.DOTALL)
+        
         patterns['delivery'] = re.compile(r'배송지[\s\t]+(.*?)[\s\t]*배송메모', re.DOTALL)
         patterns['delivery_alt'] = re.compile(r'배송지[\s\t]*([^\n\t]+(?:\n[^\t\n]+)*)', re.DOTALL)
         
@@ -47,7 +52,7 @@ class PatternManager:
         patterns['delivery_memo'] = re.compile(r'배송메모[\s\t]+([^\n\r]+)(?=\n[\s\t]*주문|$)', re.DOTALL)
         patterns['delivery_memo_alt'] = re.compile(r'배송메모[\s\t]*([^\n\r]+)', re.DOTALL)
         
-        # 전화번호 패턴 (문법 오류 수정)
+        # 전화번호 패턴
         phone_pattern = r'^\d{3}-\d{4}-\d{4}$'
         patterns['phone'] = re.compile(phone_pattern)
         
@@ -113,14 +118,14 @@ class TextProcessor:
             logger.error(f"패턴 추출 오류 ({pattern_key}): {e}")
             return error_msg
     
-    def clean_address_text(self, address: str, recipient_name: str, contact1: str) -> str:
+    def clean_address_text(self, address: str, recipient_name: str, contact1: str, contact2: str = "") -> str:
         """주소 텍스트 정리"""
         # 탭 문자를 공백으로 변환
         address = address.replace('\t', ' ')
         
         # 수취인 정보 제거
-        for info in [recipient_name, contact1]:
-            if info and "찾을 수 없습니다" not in info:
+        for info in [recipient_name, contact1, contact2]:
+            if info and "찾을 수 없습니다" not in info and info.strip():
                 address = address.replace(info, '')
         
         # 시스템 키워드 제거
@@ -163,18 +168,28 @@ class OrderExtractor:
             logger.error(f"주문수량 추출 오류: {e}")
             return "주문수량을 찾을 수 없습니다"
     
-    def extract_recipient_info(self, text: str) -> Tuple[str, str]:
-        """수취인 정보 추출"""
+    def extract_recipient_info(self, text: str) -> Tuple[str, str, str]:
+        """수취인 정보 추출 - 연락처2 포함"""
         try:
+            # 먼저 연락처2가 있는 패턴으로 시도
             match = self.pm.patterns['recipient'].search(text)
             if match:
                 recipient_name = match.group(1).strip()
                 contact1 = match.group(2).strip()
-                return recipient_name, contact1
-            return "수취인 정보를 찾을 수 없습니다", ""
+                contact2 = match.group(3).strip()
+                return recipient_name, contact1, contact2
+            
+            # 연락처2가 없는 패턴으로 시도
+            match = self.pm.patterns['recipient_no_contact2'].search(text)
+            if match:
+                recipient_name = match.group(1).strip()
+                contact1 = match.group(2).strip()
+                return recipient_name, contact1, ""
+            
+            return "수취인 정보를 찾을 수 없습니다", "", ""
         except Exception as e:
             logger.error(f"수취인 정보 추출 오류: {e}")
-            return "수취인 정보 추출 오류", ""
+            return "수취인 정보 추출 오류", "", ""
     
     def extract_delivery_memo(self, text: str) -> str:
         """배송메모 추출"""
@@ -236,7 +251,7 @@ class OrderExtractor:
             logger.error(f"배송메모 추출 오류: {e}")
             return ""
     
-    def extract_delivery_info(self, text: str, recipient_name: str, contact1: str) -> str:
+    def extract_delivery_info(self, text: str, recipient_name: str, contact1: str, contact2: str = "") -> str:
         """배송지 정보 추출 (개선된 버전)"""
         try:
             # 첫 번째 패턴 시도 (배송메모까지)
@@ -253,11 +268,11 @@ class OrderExtractor:
                     return "배송지를 찾을 수 없습니다"
             
             # 배송지 텍스트 정리
-            cleaned_address = self.tp.clean_address_text(raw_delivery_text, recipient_name, contact1)
+            cleaned_address = self.tp.clean_address_text(raw_delivery_text, recipient_name, contact1, contact2)
             
             # 빈 줄 제거 및 최종 정리
             address_lines = [line.strip() for line in cleaned_address.split('\n') if line.strip()]
-            final_address = ' '.join(address_lines)
+            final_address = '\n'.join(address_lines)  # 줄바꿈을 유지하여 반환
             
             return final_address if len(final_address) > 5 else "배송지 정보가 부족합니다"
             
@@ -292,8 +307,8 @@ class OrderExtractor:
         product = self.extract_product_info(processed_text)
         options = self.extract_options(processed_text)
         order_quantity = self.extract_order_quantity(processed_text)
-        recipient_name, contact1 = self.extract_recipient_info(processed_text)
-        delivery = self.extract_delivery_info(processed_text, recipient_name, contact1)
+        recipient_name, contact1, contact2 = self.extract_recipient_info(processed_text)
+        delivery = self.extract_delivery_info(processed_text, recipient_name, contact1, contact2)
         delivery_memo = self.extract_delivery_memo(processed_text)
         
         # 서식 제거 적용 (결과에도)
@@ -303,6 +318,7 @@ class OrderExtractor:
             order_quantity = self.tp.clean_text_format(order_quantity)
             recipient_name = self.tp.clean_text_format(recipient_name)
             contact1 = self.tp.clean_text_format(contact1)
+            contact2 = self.tp.clean_text_format(contact2)
             delivery = self.tp.clean_text_format(delivery)
             delivery_memo = self.tp.clean_text_format(delivery_memo)
         
@@ -313,6 +329,7 @@ class OrderExtractor:
             order_quantity=order_quantity,
             recipient_name=recipient_name,
             contact1=contact1,
+            contact2=contact2,  # 연락처2 추가
             delivery=delivery,
             delivery_memo=delivery_memo,
             warnings=[],
@@ -433,9 +450,15 @@ class UIManager:
         if result.recipient_name and "찾을 수 없습니다" not in result.recipient_name:
             valid_results.append(result.recipient_name)
         
+        # 연락처1 추가
         if result.contact1:
             valid_results.append(result.contact1)
         
+        # 연락처2가 있으면 추가
+        if result.contact2 and result.contact2.strip():
+            valid_results.append(result.contact2)
+        
+        # 배송지 추가 (줄바꿈 유지)
         if result.delivery and "찾을 수 없습니다" not in result.delivery:
             valid_results.append(result.delivery)
         
@@ -525,6 +548,7 @@ def main():
                             "order_quantity": result.order_quantity,
                             "recipient_name": result.recipient_name,
                             "contact1": result.contact1,
+                            "contact2": result.contact2,
                             "delivery": result.delivery,
                             "delivery_memo": result.delivery_memo,
                             "warnings": result.warnings,
@@ -534,10 +558,19 @@ def main():
                         # 패턴 매칭 디버그
                         st.subheader("패턴 매칭 결과")
                         processed_text = extractor.tp.clean_text_format(text) if remove_formatting else text
+                        
+                        recipient_match = extractor.pm.patterns['recipient'].search(processed_text)
+                        recipient_no_contact2_match = extractor.pm.patterns['recipient_no_contact2'].search(processed_text)
                         delivery_match = extractor.pm.patterns['delivery'].search(processed_text)
                         delivery_alt_match = extractor.pm.patterns['delivery_alt'].search(processed_text)
-                        delivery_memo_match = extractor.pm.patterns['delivery_memo'].search(processed_text)
-                        delivery_memo_alt_match = extractor.pm.patterns['delivery_memo_alt'].search(processed_text)
+                        
+                        st.write("수취인 패턴 (연락처2 포함):", "✅ 매칭됨" if recipient_match else "❌ 매칭 안됨")
+                        if recipient_match:
+                            st.code(f"수취인: {recipient_match.group(1)[:50]}...")
+                            st.code(f"연락처1: {recipient_match.group(2)[:50]}...")
+                            st.code(f"연락처2: {recipient_match.group(3)[:50]}...")
+                        
+                        st.write("수취인 패턴 (연락처2 없음):", "✅ 매칭됨" if recipient_no_contact2_match else "❌ 매칭 안됨")
                         
                         st.write("배송지 패턴 1 (배송메모까지):", "✅ 매칭됨" if delivery_match else "❌ 매칭 안됨")
                         if delivery_match:
@@ -546,14 +579,6 @@ def main():
                         st.write("배송지 패턴 2 (대체):", "✅ 매칭됨" if delivery_alt_match else "❌ 매칭 안됨")
                         if delivery_alt_match:
                             st.code(f"매칭 결과: {delivery_alt_match.group(1)[:200]}...")
-                        
-                        st.write("배송메모 패턴 1:", "✅ 매칭됨" if delivery_memo_match else "❌ 매칭 안됨")
-                        if delivery_memo_match:
-                            st.code(f"매칭 결과: {delivery_memo_match.group(1)[:200]}...")
-                        
-                        st.write("배송메모 패턴 2 (대체):", "✅ 매칭됨" if delivery_memo_alt_match else "❌ 매칭 안됨")
-                        if delivery_memo_alt_match:
-                            st.code(f"매칭 결과: {delivery_memo_alt_match.group(1)[:200]}...")
                         
                         # 원본 텍스트 일부 표시
                         st.subheader("처리된 텍스트 (일부)")
@@ -577,20 +602,22 @@ def main():
         - 🎯 옵션 정보  
         - 📊 주문수량
         - 👤 수취인명
-        - 📞 연락처
-        - 🏠 배송지 주소
+        - 📞 연락처1, 연락처2 (있는 경우)
+        - 🏠 배송지 주소 (줄바꿈 유지)
         - 📝 배송메모 (있는 경우)
         
         ### 💡 팁
         - 복사 버튼이 안 보이면 텍스트를 직접 선택해서 복사하세요
         - 서식이 이상하면 '서식 자동 제거' 옵션을 체크하세요
         - 정보가 제대로 추출되지 않으면 원본 텍스트를 다시 확인해보세요
+        - 연락처2가 있으면 자동으로 별도 줄에 표시됩니다
         
         ### 🚀 성능 개선사항
         - **캐싱 적용**: 반복 처리 시 더 빠른 속도
         - **메모리 최적화**: 대용량 텍스트 처리 개선
         - **에러 핸들링**: 더 안정적인 동작
         - **코드 구조화**: 유지보수성 향상
+        - **연락처2 지원**: 연락처가 2개인 경우 자동 처리
         """)
 
 if __name__ == "__main__":
