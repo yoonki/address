@@ -1,519 +1,179 @@
 import streamlit as st
 import re
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass
-from functools import lru_cache
-import logging
-
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@dataclass
-class ExtractionResult:
-    """추출 결과를 담는 데이터 클래스"""
-    product: str
-    options: List[str]
-    order_quantity: str
-    recipient_name: str
-    contact1: str
-    contact2: str  # 연락처2 추가
-    delivery: str
-    delivery_memo: str
-    warnings: List[str]
-    is_valid: bool
-
-class PatternManager:
-    """정규표현식 패턴 관리 클래스"""
-    
-    def __init__(self):
-        self._patterns = self._compile_patterns()
-        self._system_keywords = frozenset([
-            '정보', '배송지 정보', '수취인명', '연락처1', '연락처2', '배송지'
-        ])
-    
-    def _compile_patterns(self) -> Dict[str, re.Pattern]:
-        """패턴들을 컴파일하여 반환"""
-        patterns = {}
-        
-        # 각 패턴을 개별적으로 컴파일
-        patterns['product'] = re.compile(r'상품명\s*(.*?)\s*상품주문상태', re.DOTALL)
-        patterns['option'] = re.compile(r'옵션\s*(.*?)\s*주문수량', re.DOTALL)
-        patterns['order_quantity'] = re.compile(r'주문수량\s*([0-9,]+)', re.DOTALL)
-        
-        # 수취인 정보 패턴 개선 - 연락처2 처리
-        patterns['recipient'] = re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*연락처2[\s\t]*(.*?)[\s\t]*배송지', re.DOTALL)
-        patterns['recipient_no_contact2'] = re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*배송지', re.DOTALL)
-        
-        patterns['delivery'] = re.compile(r'배송지[\s\t]+(.*?)[\s\t]*배송메모', re.DOTALL)
-        patterns['delivery_alt'] = re.compile(r'배송지[\s\t]*([^\n\t]+(?:\n[^\t\n]+)*)', re.DOTALL)
-        
-        # 배송메모 추출 패턴 추가
-        patterns['delivery_memo'] = re.compile(r'배송메모[\s\t]+([^\n\r]+)(?=\n[\s\t]*주문|$)', re.DOTALL)
-        patterns['delivery_memo_alt'] = re.compile(r'배송메모[\s\t]*([^\n\r]+)', re.DOTALL)
-        
-        # 전화번호 패턴
-        phone_pattern = r'^\d{3}-\d{4}-\d{4}$'
-        patterns['phone'] = re.compile(phone_pattern)
-        
-        # 정리용 패턴들
-        patterns['cleanup_whitespace'] = re.compile(r'\s+')
-        patterns['cleanup_newlines'] = re.compile(r'\n\s*\n')
-        patterns['special_chars'] = re.compile(r'[\u00a0\u2009\u200b\u200c\u200d\ufeff]')
-        patterns['cleanup_tabs'] = re.compile(r'\t+')
-        
-        return patterns
-    
-    @property
-    def patterns(self) -> Dict[str, re.Pattern]:
-        return self._patterns
-    
-    @property
-    def system_keywords(self) -> frozenset:
-        return self._system_keywords
-
-class TextProcessor:
-    """텍스트 처리 클래스"""
-    
-    def __init__(self, pattern_manager: PatternManager):
-        self.pm = pattern_manager
-        # 특수문자 변환 매핑
-        self._char_replacements = (
-            ('\u00a0', ' '),    # Non-breaking space
-            ('\u2009', ' '),    # Thin space
-            ('\u200b', ''),     # Zero-width space
-            ('\u200c', ''),     # Zero-width non-joiner
-            ('\u200d', ''),     # Zero-width joiner
-            ('\ufeff', ''),     # Byte order mark
-            ('\\\\n', '\n'),    # Double escaped newlines
-            ('\\n', '\n'),      # Escaped newlines
-            ('\t', ' ')         # Tabs to spaces
-        )
-    
-    @lru_cache(maxsize=128)
-    def clean_text_format(self, text: str) -> str:
-        """텍스트 서식을 정리 (캐싱 적용)"""
-        if not text:
-            return text
-        
-        # 특수 문자 일괄 변환
-        cleaned = text
-        for old, new in self._char_replacements:
-            cleaned = cleaned.replace(old, new)
-        
-        # 정규표현식으로 마지막 정리
-        cleaned = self.pm.patterns['cleanup_newlines'].sub('\n', cleaned)
-        cleaned = self.pm.patterns['cleanup_whitespace'].sub(' ', cleaned)
-        cleaned = self.pm.patterns['cleanup_tabs'].sub(' ', cleaned)
-        
-        return cleaned.strip()
-    
-    def extract_by_pattern(self, text: str, pattern_key: str, 
-                          error_msg: str = "정보를 찾을 수 없습니다") -> str:
-        """패턴으로 텍스트 추출"""
-        try:
-            match = self.pm.patterns[pattern_key].search(text)
-            return match.group(1).strip() if match else error_msg
-        except Exception as e:
-            logger.error(f"패턴 추출 오류 ({pattern_key}): {e}")
-            return error_msg
-    
-    def clean_address_text(self, address: str, recipient_name: str, contact1: str, contact2: str = "") -> str:
-        """주소 텍스트 정리"""
-        # 탭 문자를 공백으로 변환
-        address = address.replace('\t', ' ')
-        
-        # 수취인 정보 제거
-        for info in [recipient_name, contact1, contact2]:
-            if info and "찾을 수 없습니다" not in info and info.strip():
-                address = address.replace(info, '')
-        
-        # 시스템 키워드 제거
-        for keyword in self.pm.system_keywords:
-            address = address.replace(keyword, ' ')
-        
-        # 불필요한 공백 정리
-        address = self.pm.patterns['cleanup_whitespace'].sub(' ', address)
-        
-        return address.strip()
 
 class OrderExtractor:
-    """주문 정보 추출 클래스"""
+    """간소화된 주문 정보 추출 클래스"""
     
     def __init__(self):
-        self.pm = PatternManager()
-        self.tp = TextProcessor(self.pm)
+        # 정규표현식 패턴들
+        self.patterns = {
+            'product': re.compile(r'상품명\s*(.*?)\s*상품주문상태', re.DOTALL),
+            'option': re.compile(r'옵션\s*(.*?)\s*주문수량', re.DOTALL),
+            'order_quantity': re.compile(r'주문수량\s*([0-9,]+)', re.DOTALL),
+            'recipient_with_contact2': re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*연락처2[\s\t]*(.*?)[\s\t]*배송지', re.DOTALL),
+            'recipient_no_contact2': re.compile(r'수취인명[\s\t]*(.*?)[\s\t]*연락처1[\s\t]*(.*?)[\s\t]*배송지', re.DOTALL),
+            'delivery': re.compile(r'배송지[\s\t]+(.*?)[\s\t]*배송메모', re.DOTALL),
+            'delivery_alt': re.compile(r'배송지[\s\t]*([^\n\t]+(?:\n[^\t\n]+)*)', re.DOTALL),
+            'delivery_memo': re.compile(r'배송메모[\s\t]*([^\n\r]+)', re.DOTALL),
+        }
     
-    def extract_product_info(self, text: str) -> str:
-        """상품 정보 추출"""
-        return self.tp.extract_by_pattern(text, 'product', "상품명을 찾을 수 없습니다")
-    
-    def extract_options(self, text: str) -> List[str]:
-        """옵션 정보 추출"""
-        try:
-            matches = self.pm.patterns['option'].findall(text)
-            return [match.strip() for match in matches] if matches else ["옵션 정보를 찾을 수 없습니다"]
-        except Exception as e:
-            logger.error(f"옵션 추출 오류: {e}")
-            return ["옵션 정보를 찾을 수 없습니다"]
-    
-    def extract_order_quantity(self, text: str) -> str:
-        """주문수량 추출"""
-        try:
-            match = self.pm.patterns['order_quantity'].search(text)
-            if match:
-                return f"주문수량 : {match.group(1).replace(',', '')}"
-            return "주문수량을 찾을 수 없습니다"
-        except Exception as e:
-            logger.error(f"주문수량 추출 오류: {e}")
-            return "주문수량을 찾을 수 없습니다"
-    
-    def extract_recipient_info(self, text: str) -> Tuple[str, str, str]:
-        """수취인 정보 추출 - 연락처2 포함"""
-        try:
-            # 먼저 연락처2가 있는 패턴으로 시도
-            match = self.pm.patterns['recipient'].search(text)
-            if match:
-                recipient_name = match.group(1).strip()
-                contact1 = match.group(2).strip()
-                contact2 = match.group(3).strip()
-                return recipient_name, contact1, contact2
-            
-            # 연락처2가 없는 패턴으로 시도
-            match = self.pm.patterns['recipient_no_contact2'].search(text)
-            if match:
-                recipient_name = match.group(1).strip()
-                contact1 = match.group(2).strip()
-                return recipient_name, contact1, ""
-            
-            return "수취인 정보를 찾을 수 없습니다", "", ""
-        except Exception as e:
-            logger.error(f"수취인 정보 추출 오류: {e}")
-            return "수취인 정보 추출 오류", "", ""
-    
-    def extract_delivery_memo(self, text: str) -> str:
-        """배송메모 추출"""
-        try:
-            # 첫 번째 패턴 시도 (주문 처리 이력까지)
-            match = self.pm.patterns['delivery_memo'].search(text)
-            
-            if match:
-                memo_text = match.group(1).strip()
-            else:
-                # 두 번째 패턴 시도 (단일 라인)
-                match = self.pm.patterns['delivery_memo_alt'].search(text)
-                if match:
-                    memo_text = match.group(1).strip()
-                else:
-                    return ""
-            
-            # 빈 배송메모 체크 (배송메모 다음에 바로 줄바꿈이나 다른 섹션이 오는 경우)
-            if not memo_text or memo_text == "":
-                return ""
-            
-            # 메모 텍스트 정리
-            memo_text = self.tp.clean_text_format(memo_text)
-            
-            # 불필요한 정보 제거 (확장된 키워드 목록)
-            unwanted_keywords = [
-                '주문 처리 이력', '처리일', '주문', '결제완료', '발주확인',
-                '정보', '발송기한', '닫기', '삭제',
-                '2025.06.13', '2025-06-13', '2025.06.17', '2025-06-17',  # 날짜 형식
-                ':', '-'  # 특수문자도 정리
-            ]
-            
-            for keyword in unwanted_keywords:
-                memo_text = memo_text.replace(keyword, '').strip()
-            
-            # 연속된 공백 제거 및 정리
-            memo_text = re.sub(r'\s+', ' ', memo_text).strip()
-            
-            # 날짜 패턴 제거 (YYYY.MM.DD, YYYY-MM-DD, YYYYMMDD 형식)
-            memo_text = re.sub(r'\d{4}[.-]?\d{2}[.-]?\d{2}', '', memo_text).strip()
-            
-            # 시간 패턴 제거 (HH:MM:SS 형식)
-            memo_text = re.sub(r'\d{2}:\d{2}:\d{2}', '', memo_text).strip()
-            
-            # 마지막으로 연속된 공백과 특수문자 정리
-            memo_text = re.sub(r'[:\-\s]+', ' ', memo_text).strip()
-            
-            # 최종 검증: 의미있는 내용이 있는지 확인
-            if not memo_text or len(memo_text) <= 2 or memo_text.isspace():
-                return ""
-                
-            # 숫자만 있는 경우도 제거 (날짜 잔여물)
-            if memo_text.isdigit():
-                return ""
-            
-            return memo_text
-            
-        except Exception as e:
-            logger.error(f"배송메모 추출 오류: {e}")
+    def clean_text(self, text):
+        """텍스트 정리"""
+        if not text:
             return ""
+        
+        # 특수문자 제거 및 공백 정리
+        text = text.replace('\t', ' ').replace('\u00a0', ' ')
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
     
-    def extract_delivery_info(self, text: str, recipient_name: str, contact1: str, contact2: str = "") -> str:
-        """배송지 정보 추출 (개선된 버전)"""
-        try:
-            # 첫 번째 패턴 시도 (배송메모까지)
-            match = self.pm.patterns['delivery'].search(text)
-            
+    def extract_info(self, text):
+        """모든 정보 추출"""
+        text = self.clean_text(text)
+        result = {}
+        
+        # 상품명 추출
+        match = self.patterns['product'].search(text)
+        result['product'] = self.clean_text(match.group(1)) if match else ""
+        
+        # 옵션 추출
+        match = self.patterns['option'].search(text)
+        result['option'] = self.clean_text(match.group(1)) if match else ""
+        
+        # 주문수량 추출
+        match = self.patterns['order_quantity'].search(text)
+        result['quantity'] = f"주문수량 : {match.group(1)}" if match else ""
+        
+        # 수취인 정보 추출 (연락처2 있는 경우 먼저 시도)
+        match = self.patterns['recipient_with_contact2'].search(text)
+        if match:
+            result['recipient'] = self.clean_text(match.group(1))
+            result['contact1'] = self.clean_text(match.group(2))
+            result['contact2'] = self.clean_text(match.group(3))
+        else:
+            # 연락처2 없는 경우
+            match = self.patterns['recipient_no_contact2'].search(text)
             if match:
-                raw_delivery_text = match.group(1).strip()
+                result['recipient'] = self.clean_text(match.group(1))
+                result['contact1'] = self.clean_text(match.group(2))
+                result['contact2'] = ""
             else:
-                # 두 번째 패턴 시도 (배송메모 없이)
-                match = self.pm.patterns['delivery_alt'].search(text)
-                if match:
-                    raw_delivery_text = match.group(1).strip()
-                else:
-                    return "배송지를 찾을 수 없습니다"
+                result['recipient'] = ""
+                result['contact1'] = ""
+                result['contact2'] = ""
+        
+        # 배송지 추출
+        match = self.patterns['delivery'].search(text)
+        if match:
+            delivery_text = match.group(1)
+        else:
+            match = self.patterns['delivery_alt'].search(text)
+            delivery_text = match.group(1) if match else ""
+        
+        if delivery_text:
+            # 배송지에서 수취인 정보 제거
+            for info in [result['recipient'], result['contact1'], result['contact2']]:
+                if info:
+                    delivery_text = delivery_text.replace(info, '')
             
-            # 배송지 텍스트 정리
-            cleaned_address = self.tp.clean_address_text(raw_delivery_text, recipient_name, contact1, contact2)
+            # 불필요한 키워드 제거
+            for keyword in ['정보', '배송지 정보', '수취인명', '연락처1', '연락처2', '배송지']:
+                delivery_text = delivery_text.replace(keyword, '')
             
-            # 빈 줄 제거 및 최종 정리
-            address_lines = [line.strip() for line in cleaned_address.split('\n') if line.strip()]
-            final_address = '\n'.join(address_lines)  # 줄바꿈을 유지하여 반환
-            
-            return final_address if len(final_address) > 5 else "배송지 정보가 부족합니다"
-            
-        except Exception as e:
-            logger.error(f"배송지 추출 오류: {e}")
-            return "배송지 추출 오류"
-    
-    def validate_results(self, result: ExtractionResult) -> List[str]:
-        """추출 결과 검증"""
-        warnings = []
+            # 줄바꿈 정리
+            lines = [line.strip() for line in delivery_text.split('\n') if line.strip()]
+            result['delivery'] = '\n'.join(lines)
+        else:
+            result['delivery'] = ""
         
-        if "찾을 수 없습니다" in result.product:
-            warnings.append("상품명을 찾지 못했습니다")
-        
-        if not result.recipient_name or "찾을 수 없습니다" in result.recipient_name:
-            warnings.append("수취인명을 찾지 못했습니다")
-        
-        if not result.contact1 or not self.pm.patterns['phone'].match(result.contact1):
-            warnings.append("올바르지 않은 전화번호입니다")
-        
-        if "찾을 수 없습니다" in result.delivery:
-            warnings.append("배송지를 찾지 못했습니다")
-        
-        return warnings
-    
-    def process_text(self, text: str, remove_formatting: bool = True) -> ExtractionResult:
-        """텍스트 추출 통합 처리"""
-        # 서식 제거
-        processed_text = self.tp.clean_text_format(text) if remove_formatting else text
-        
-        # 정보 추출
-        product = self.extract_product_info(processed_text)
-        options = self.extract_options(processed_text)
-        order_quantity = self.extract_order_quantity(processed_text)
-        recipient_name, contact1, contact2 = self.extract_recipient_info(processed_text)
-        delivery = self.extract_delivery_info(processed_text, recipient_name, contact1, contact2)
-        delivery_memo = self.extract_delivery_memo(processed_text)
-        
-        # 서식 제거 적용 (결과에도)
-        if remove_formatting:
-            product = self.tp.clean_text_format(product)
-            options = [self.tp.clean_text_format(opt) for opt in options]
-            order_quantity = self.tp.clean_text_format(order_quantity)
-            recipient_name = self.tp.clean_text_format(recipient_name)
-            contact1 = self.tp.clean_text_format(contact1)
-            contact2 = self.tp.clean_text_format(contact2)
-            delivery = self.tp.clean_text_format(delivery)
-            delivery_memo = self.tp.clean_text_format(delivery_memo)
-        
-        # 결과 객체 생성
-        result = ExtractionResult(
-            product=product,
-            options=options,
-            order_quantity=order_quantity,
-            recipient_name=recipient_name,
-            contact1=contact1,
-            contact2=contact2,  # 연락처2 추가
-            delivery=delivery,
-            delivery_memo=delivery_memo,
-            warnings=[],
-            is_valid=True
-        )
-        
-        # 검증
-        result.warnings = self.validate_results(result)
-        result.is_valid = len(result.warnings) == 0
+        # 배송메모 추출
+        match = self.patterns['delivery_memo'].search(text)
+        if match:
+            memo = self.clean_text(match.group(1))
+            # 불필요한 정보 제거
+            unwanted = ['주문 처리 이력', '처리일', '주문', '결제완료', '닫기']
+            for word in unwanted:
+                memo = memo.replace(word, '')
+            # 날짜 패턴 제거
+            memo = re.sub(r'\d{4}[.-]?\d{2}[.-]?\d{2}', '', memo)
+            memo = re.sub(r'\d{2}:\d{2}:\d{2}', '', memo)
+            memo = re.sub(r'[:\-\s]+', ' ', memo).strip()
+            result['delivery_memo'] = memo if len(memo) > 2 and not memo.isdigit() else ""
+        else:
+            result['delivery_memo'] = ""
         
         return result
-
-class UIManager:
-    """UI 관리 클래스"""
     
-    @staticmethod
-    @st.cache_data
-    def get_responsive_css() -> str:
-        """반응형 CSS 반환 (캐싱 적용)"""
-        return """
-        <style>
-            /* 전체 컨테이너 최적화 */
-            .main .block-container {
-                padding-top: 2rem;
-                padding-bottom: 2rem;
-                max-width: 1200px;
-            }
-            
-            /* 공통 버튼 스타일 */
-            .stButton button {
-                background: linear-gradient(45deg, #FF6B6B, #4ECDC4) !important;
-                border: none !important;
-                border-radius: 25px !important;
-                color: white !important;
-                font-weight: bold !important;
-                transition: all 0.3s ease !important;
-            }
-            
-            .stButton button:hover {
-                transform: translateY(-2px) !important;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.2) !important;
-            }
-            
-            /* 텍스트 영역 최적화 */
-            .stTextArea textarea {
-                border-radius: 10px !important;
-                border: 2px solid #e0e0e0 !important;
-                transition: border-color 0.3s ease !important;
-            }
-            
-            .stTextArea textarea:focus {
-                border-color: #4ECDC4 !important;
-                box-shadow: 0 0 10px rgba(78, 205, 196, 0.3) !important;
-            }
-            
-            /* 모바일 최적화 */
-            @media (max-width: 768px) {
-                .main .block-container {
-                    padding: 1rem 0.5rem !important;
-                    max-width: 100% !important;
-                }
-                
-                .stButton button {
-                    width: 100% !important;
-                    height: 3rem !important;
-                    font-size: 18px !important;
-                }
-                
-                .stTextArea textarea {
-                    font-size: 16px !important;
-                }
-                
-                h1 { font-size: 24px !important; text-align: center !important; }
-                h2, h3 { font-size: 18px !important; }
-            }
-            
-            /* 태블릿 최적화 */
-            @media (min-width: 769px) and (max-width: 1024px) {
-                .main .block-container {
-                    padding: 1.5rem 1rem !important;
-                    max-width: 95% !important;
-                }
-                
-                .stButton button {
-                    height: 2.5rem !important;
-                    font-size: 16px !important;
-                }
-            }
-            
-            /* 알림 스타일 */
-            .stSuccess { border-radius: 10px !important; border-left: 5px solid #4CAF50 !important; }
-            .stWarning { border-radius: 10px !important; border-left: 5px solid #FF9800 !important; }
-            .stError { border-radius: 10px !important; border-left: 5px solid #F44336 !important; }
-            .stInfo { border-radius: 10px !important; border-left: 5px solid #2196F3 !important; }
-        </style>
-        """
-    
-    def apply_responsive_css(self):
-        """반응형 CSS 적용"""
-        st.markdown(self.get_responsive_css(), unsafe_allow_html=True)
-    
-    @staticmethod
-    def create_copy_section(result: ExtractionResult):
-        """복사용 섹션 생성"""
-        # 유효한 결과만 필터링
-        valid_results = []
+    def format_output(self, result):
+        """출력 형식으로 포맷팅"""
+        output_lines = []
         
-        if result.product and "찾을 수 없습니다" not in result.product:
-            valid_results.append(result.product)
+        # 각 정보를 순서대로 추가 (값이 있는 경우만)
+        if result['product']:
+            output_lines.append(result['product'])
         
-        for option in result.options:
-            if option and "찾을 수 없습니다" not in option:
-                valid_results.append(option)
+        if result['option']:
+            output_lines.append(result['option'])
         
-        if result.order_quantity and "찾을 수 없습니다" not in result.order_quantity:
-            valid_results.append(result.order_quantity)
+        if result['quantity']:
+            output_lines.append(result['quantity'])
         
-        if result.recipient_name and "찾을 수 없습니다" not in result.recipient_name:
-            valid_results.append(result.recipient_name)
+        if result['recipient']:
+            output_lines.append(result['recipient'])
         
-        # 연락처1 추가
-        if result.contact1:
-            valid_results.append(result.contact1)
+        if result['contact1']:
+            output_lines.append(result['contact1'])
         
-        # 연락처2가 있으면 추가
-        if result.contact2 and result.contact2.strip():
-            valid_results.append(result.contact2)
+        if result['contact2']:
+            output_lines.append(result['contact2'])
         
-        # 배송지 추가 (줄바꿈 유지)
-        if result.delivery and "찾을 수 없습니다" not in result.delivery:
-            valid_results.append(result.delivery)
+        if result['delivery']:
+            output_lines.append(result['delivery'])
         
-        # 배송메모가 있고 내용이 있을 때만 추가
-        if result.delivery_memo and result.delivery_memo.strip() and len(result.delivery_memo.strip()) > 0:
-            valid_results.append(f"배송메모: {result.delivery_memo}")
+        if result['delivery_memo']:
+            output_lines.append(f"배송메모: {result['delivery_memo']}")
         
-        final_text = '\n'.join(valid_results)
-        
-        # 결과 표시
-        st.subheader("📋 추출된 정보")
-        st.info("💡 **복사 방법**: 아래 박스 우상단의 복사 버튼을 클릭하거나 텍스트를 선택해서 복사하세요!")
-        st.code(final_text, language=None)
-        
-        return len(valid_results) > 0
+        return '\n'.join(output_lines)
 
 def main():
     """메인 애플리케이션"""
-    # 페이지 설정
     st.set_page_config(
         page_title="🏪 스마트스토어 주문 정보 추출기",
         page_icon="🏪",
-        layout="wide",
-        initial_sidebar_state="collapsed"
+        layout="wide"
     )
     
-    # UI 및 추출기 초기화
-    ui_manager = UIManager()
-    extractor = OrderExtractor()
-    
-    # 스타일 적용
-    ui_manager.apply_responsive_css()
+    # 간단한 CSS
+    st.markdown("""
+    <style>
+        .stButton button {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4) !important;
+            border: none !important;
+            border-radius: 25px !important;
+            color: white !important;
+            font-weight: bold !important;
+        }
+        .stTextArea textarea {
+            border-radius: 10px !important;
+            border: 2px solid #e0e0e0 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     
     # 제목
     st.title("🏪 스마트스토어 주문 정보 추출기")
     st.markdown("---")
     
+    # 추출기 초기화
+    extractor = OrderExtractor()
+    
     # 입력 섹션
     st.markdown("### 📝 주문 정보 입력")
-    
     text = st.text_area(
         "주문 정보를 붙여넣으세요:",
         height=300,
-        placeholder="스마트스토어에서 복사한 주문 정보를 여기에 붙여넣으세요...",
-        help="복사한 텍스트를 그대로 붙여넣으면 됩니다"
+        placeholder="스마트스토어에서 복사한 주문 정보를 여기에 붙여넣으세요..."
     )
-    
-    # 옵션 설정
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        remove_formatting = st.checkbox(
-            "서식 자동 제거",
-            value=True,
-            help="애플 메일 등에서 복사한 텍스트의 서식을 자동으로 제거합니다"
-        )
     
     # 처리 버튼
     if st.button("🔍 정보 추출하기", type="primary", use_container_width=True):
@@ -524,68 +184,24 @@ def main():
         with st.spinner("🔄 정보를 추출하는 중..."):
             try:
                 # 정보 추출
-                result = extractor.process_text(text, remove_formatting)
+                result = extractor.extract_info(text)
+                formatted_output = extractor.format_output(result)
                 
-                # 경고 표시
-                if result.warnings:
-                    for warning in result.warnings:
-                        st.warning(f"⚠️ {warning}")
-                
-                st.markdown("---")
-                
-                # 결과 표시
-                if ui_manager.create_copy_section(result):
-                    st.success("✅ 정보 추출 완료! 위의 복사 버튼을 이용해 정보를 복사하세요.")
+                if formatted_output:
+                    st.markdown("---")
+                    st.subheader("📋 추출된 정보")
+                    st.info("💡 **복사 방법**: 아래 박스 우상단의 복사 버튼을 클릭하거나 텍스트를 선택해서 복사하세요!")
+                    st.code(formatted_output, language=None)
+                    st.success("✅ 정보 추출 완료!")
                 else:
                     st.error("❌ 추출할 수 있는 정보가 없습니다. 원본 텍스트를 확인해주세요.")
                 
-                # 디버그 정보 (개발용)
-                if st.checkbox("🔧 디버그 정보 표시", key="debug"):
+                # 디버그 정보
+                if st.checkbox("🔧 디버그 정보 표시"):
                     with st.expander("디버그 정보"):
-                        st.json({
-                            "product": result.product,
-                            "options": result.options,
-                            "order_quantity": result.order_quantity,
-                            "recipient_name": result.recipient_name,
-                            "contact1": result.contact1,
-                            "contact2": result.contact2,
-                            "delivery": result.delivery,
-                            "delivery_memo": result.delivery_memo,
-                            "warnings": result.warnings,
-                            "is_valid": result.is_valid
-                        })
-                        
-                        # 패턴 매칭 디버그
-                        st.subheader("패턴 매칭 결과")
-                        processed_text = extractor.tp.clean_text_format(text) if remove_formatting else text
-                        
-                        recipient_match = extractor.pm.patterns['recipient'].search(processed_text)
-                        recipient_no_contact2_match = extractor.pm.patterns['recipient_no_contact2'].search(processed_text)
-                        delivery_match = extractor.pm.patterns['delivery'].search(processed_text)
-                        delivery_alt_match = extractor.pm.patterns['delivery_alt'].search(processed_text)
-                        
-                        st.write("수취인 패턴 (연락처2 포함):", "✅ 매칭됨" if recipient_match else "❌ 매칭 안됨")
-                        if recipient_match:
-                            st.code(f"수취인: {recipient_match.group(1)[:50]}...")
-                            st.code(f"연락처1: {recipient_match.group(2)[:50]}...")
-                            st.code(f"연락처2: {recipient_match.group(3)[:50]}...")
-                        
-                        st.write("수취인 패턴 (연락처2 없음):", "✅ 매칭됨" if recipient_no_contact2_match else "❌ 매칭 안됨")
-                        
-                        st.write("배송지 패턴 1 (배송메모까지):", "✅ 매칭됨" if delivery_match else "❌ 매칭 안됨")
-                        if delivery_match:
-                            st.code(f"매칭 결과: {delivery_match.group(1)[:200]}...")
-                        
-                        st.write("배송지 패턴 2 (대체):", "✅ 매칭됨" if delivery_alt_match else "❌ 매칭 안됨")
-                        if delivery_alt_match:
-                            st.code(f"매칭 결과: {delivery_alt_match.group(1)[:200]}...")
-                        
-                        # 원본 텍스트 일부 표시
-                        st.subheader("처리된 텍스트 (일부)")
-                        st.text_area("처리된 텍스트", processed_text[:1000] + "..." if len(processed_text) > 1000 else processed_text, height=200)
+                        st.json(result)
                 
             except Exception as e:
-                logger.error(f"처리 중 오류 발생: {e}")
                 st.error(f"❌ 처리 중 오류가 발생했습니다: {str(e)}")
     
     # 사용법 안내
@@ -608,16 +224,8 @@ def main():
         
         ### 💡 팁
         - 복사 버튼이 안 보이면 텍스트를 직접 선택해서 복사하세요
-        - 서식이 이상하면 '서식 자동 제거' 옵션을 체크하세요
         - 정보가 제대로 추출되지 않으면 원본 텍스트를 다시 확인해보세요
         - 연락처2가 있으면 자동으로 별도 줄에 표시됩니다
-        
-        ### 🚀 성능 개선사항
-        - **캐싱 적용**: 반복 처리 시 더 빠른 속도
-        - **메모리 최적화**: 대용량 텍스트 처리 개선
-        - **에러 핸들링**: 더 안정적인 동작
-        - **코드 구조화**: 유지보수성 향상
-        - **연락처2 지원**: 연락처가 2개인 경우 자동 처리
         """)
 
 if __name__ == "__main__":
