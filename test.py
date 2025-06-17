@@ -91,14 +91,17 @@ class OrderExtractor:
         if match:
             memo = self.clean_text(match.group(1))
             # 불필요한 정보 제거
-            unwanted = ['주문 처리 이력', '처리일', '주문', '결제완료', '닫기']
+            unwanted = ['주문 처리 이력', '처리일', '주문', '결제완료', '닫기', '정보', '발주확인', '발송기한']
             for word in unwanted:
                 memo = memo.replace(word, '')
             # 날짜 패턴 제거
             memo = re.sub(r'\d{4}[.-]?\d{2}[.-]?\d{2}', '', memo)
             memo = re.sub(r'\d{2}:\d{2}:\d{2}', '', memo)
+            # 시간 패턴과 콜론, 하이픈 제거
+            memo = re.sub(r'\d{2}:\d{2}:\d{2}', '', memo)
             memo = re.sub(r'[:\-\s]+', ' ', memo).strip()
-            result['delivery_memo'] = memo if len(memo) > 2 and not memo.isdigit() else ""
+            # 배송메모가 실제로 의미있는 내용이 있는지 확인
+            result['delivery_memo'] = memo if len(memo) > 2 and not memo.isdigit() and memo.strip() else ""
         else:
             result['delivery_memo'] = ""
         
